@@ -8,7 +8,6 @@ package boxsniffer;
 
 import java.awt.GridLayout;
 import java.io.File;
-import java.io.FileFilter;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -27,7 +26,6 @@ import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
-import javax.swing.filechooser.FileSystemView;
 
 /**
  *
@@ -35,7 +33,7 @@ import javax.swing.filechooser.FileSystemView;
  */
 public class LinkGUI extends javax.swing.JFrame {
     
-    private final BoxSniffer ls = new BoxSniffer();
+    private BoxSniffer ls = new BoxSniffer();
     private List allCourses = new ArrayList();
     private ListModel listModel;
     private int selected = 0;
@@ -115,6 +113,7 @@ public class LinkGUI extends javax.swing.JFrame {
         jMenuItem1 = new javax.swing.JMenuItem();
         jMenuItem8 = new javax.swing.JMenuItem();
         jMenuItem3 = new javax.swing.JMenuItem();
+        jMenuItem9 = new javax.swing.JMenuItem();
         jMenuItem5 = new javax.swing.JMenuItem();
         jMenu3 = new javax.swing.JMenu();
         jMenuItem6 = new javax.swing.JMenuItem();
@@ -254,6 +253,15 @@ public class LinkGUI extends javax.swing.JFrame {
             }
         });
         jMenu1.add(jMenuItem3);
+
+        jMenuItem9.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_A, java.awt.event.InputEvent.CTRL_MASK));
+        jMenuItem9.setText("Admin");
+        jMenuItem9.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem9ActionPerformed(evt);
+            }
+        });
+        jMenu1.add(jMenuItem9);
 
         jMenuItem5.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_Q, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItem5.setText("Exit");
@@ -619,6 +627,16 @@ public class LinkGUI extends javax.swing.JFrame {
         this.selected = this.pickCourse.getSelectedIndex();
     }//GEN-LAST:event_pickCourseValueChanged
 
+    private void jMenuItem9ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem9ActionPerformed
+        // TODO add your handling code here:
+        // Admin
+        java.awt.EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                new Admin().setVisible(true);
+            }
+        });
+    }//GEN-LAST:event_jMenuItem9ActionPerformed
+    
     public void showBroken(String brokens){
         
         this.displayArea.setText(brokens);
@@ -635,13 +653,12 @@ public class LinkGUI extends javax.swing.JFrame {
     public void addToList(String filter){
         final String[] strings = new String[this.allCourses.size()];
         int next = 0;
-        for (int i = 0; i < this.allCourses.size(); i++){
-            if (filter.isEmpty()){
-                strings[next++] = this.allCourses.get(i).toString();
-            }
-            else{
-                if (this.allCourses.get(i).toString().toLowerCase().indexOf(filter.toLowerCase()) != -1){
-                    strings[next++] = this.allCourses.get(i).toString();
+        for (Object allCourse : this.allCourses) {
+            if (filter.isEmpty()) {
+                strings[next++] = allCourse.toString();
+            } else {
+                if (allCourse.toString().toLowerCase().contains(filter.toLowerCase())) {
+                    strings[next++] = allCourse.toString();
                 }                
             }
         }
@@ -709,6 +726,7 @@ public class LinkGUI extends javax.swing.JFrame {
     private javax.swing.JMenuItem jMenuItem6;
     private javax.swing.JMenuItem jMenuItem7;
     private javax.swing.JMenuItem jMenuItem8;
+    private javax.swing.JMenuItem jMenuItem9;
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JButton loginBtn;
     private javax.swing.JButton pause;

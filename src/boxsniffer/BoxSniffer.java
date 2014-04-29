@@ -256,7 +256,7 @@ public final class BoxSniffer {
         } catch (TransformerException | IOException | ParserConfigurationException | SAXException ex) {
             addError("201", "Couldn't execute getItemList Dlap Call");
         }
-    }       
+    }     
     
     /**
      * Dlap, sets list of domain level courses
