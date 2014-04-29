@@ -165,6 +165,11 @@ public class LinkGUI extends javax.swing.JFrame {
                 pickCourseKeyPressed(evt);
             }
         });
+        pickCourse.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
+            public void valueChanged(javax.swing.event.ListSelectionEvent evt) {
+                pickCourseValueChanged(evt);
+            }
+        });
         pickScroll.setViewportView(pickCourse);
 
         auditBtn.setText("Start");
@@ -608,6 +613,11 @@ public class LinkGUI extends javax.swing.JFrame {
             }
         }
     }//GEN-LAST:event_jMenuItem8ActionPerformed
+
+    private void pickCourseValueChanged(javax.swing.event.ListSelectionEvent evt) {//GEN-FIRST:event_pickCourseValueChanged
+        // TODO add your handling code here:
+        this.selected = this.pickCourse.getSelectedIndex();
+    }//GEN-LAST:event_pickCourseValueChanged
 
     public void showBroken(String brokens){
         
