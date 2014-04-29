@@ -7,8 +7,16 @@
 package boxsniffer;
 
 import java.awt.GridLayout;
+import java.io.File;
+import java.io.FileFilter;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -19,6 +27,7 @@ import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
+import javax.swing.filechooser.FileSystemView;
 
 /**
  *
@@ -104,13 +113,13 @@ public class LinkGUI extends javax.swing.JFrame {
         jMenuBar1 = new javax.swing.JMenuBar();
         jMenu1 = new javax.swing.JMenu();
         jMenuItem1 = new javax.swing.JMenuItem();
+        jMenuItem8 = new javax.swing.JMenuItem();
         jMenuItem3 = new javax.swing.JMenuItem();
         jMenuItem5 = new javax.swing.JMenuItem();
         jMenu3 = new javax.swing.JMenu();
         jMenuItem6 = new javax.swing.JMenuItem();
         jMenu4 = new javax.swing.JMenu();
         jMenuItem7 = new javax.swing.JMenuItem();
-        jMenuItem8 = new javax.swing.JMenuItem();
         jMenu2 = new javax.swing.JMenu();
         jMenuItem2 = new javax.swing.JMenuItem();
         jMenuItem4 = new javax.swing.JMenuItem();
@@ -223,6 +232,15 @@ public class LinkGUI extends javax.swing.JFrame {
         });
         jMenu1.add(jMenuItem1);
 
+        jMenuItem8.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, java.awt.event.InputEvent.CTRL_MASK));
+        jMenuItem8.setText("Save");
+        jMenuItem8.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem8ActionPerformed(evt);
+            }
+        });
+        jMenu1.add(jMenuItem8);
+
         jMenuItem3.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_G, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItem3.setText("Get");
         jMenuItem3.addActionListener(new java.awt.event.ActionListener() {
@@ -266,14 +284,6 @@ public class LinkGUI extends javax.swing.JFrame {
             }
         });
         jMenu4.add(jMenuItem7);
-
-        jMenuItem8.setText("Export to CSV");
-        jMenuItem8.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jMenuItem8ActionPerformed(evt);
-            }
-        });
-        jMenu4.add(jMenuItem8);
 
         jMenuBar1.add(jMenu4);
 
@@ -571,7 +581,32 @@ public class LinkGUI extends javax.swing.JFrame {
 
     private void jMenuItem8ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem8ActionPerformed
         // TODO add your handling code here:
-        
+        // parent component of the dialog
+        JFrame parentFrame = new JFrame();
+
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Specify a file to save");
+        String course = "";
+        if (!this.pickCourse.isSelectionEmpty()){
+            course = this.pickCourse.getSelectedValue().toString().split("::")[0];
+        }        
+        fileChooser.setSelectedFile(new File(course + ".csv"));
+        int userSelection = fileChooser.showSaveDialog(parentFrame);
+
+        if (userSelection == JFileChooser.APPROVE_OPTION) {
+            PrintWriter out = null;
+            try {
+                File fileToSave = fileChooser.getSelectedFile();
+                System.out.println("Save as file: " + fileToSave.getAbsolutePath());
+                fileToSave.canWrite();
+                out = new PrintWriter(fileToSave.getAbsolutePath());
+                out.println(this.displayArea.getText());
+            } catch (FileNotFoundException ex) {
+                Logger.getLogger(LinkGUI.class.getName()).log(Level.SEVERE, null, ex);
+            } finally {
+                out.close();
+            }
+        }
     }//GEN-LAST:event_jMenuItem8ActionPerformed
 
     public void showBroken(String brokens){
