@@ -85,7 +85,9 @@ public final class BoxSniffer {
                 String itemType = typeTag.get(0).text();
                 
                 // Check item type, needs to check all types
-                if (itemType.contains("Resource") || itemType.contains("Assignment") || itemType.contains("Discussion") || itemType.contains("Homework")) {
+                if (!itemType.contains("AssetLink") && !itemType.contains("Folder")
+                        && !itemType.contains("Lessons") && !itemType.contains("RssFeed")
+                        && !itemType.contains("Shortcut") && !itemType.contains("Survey")) {
                     
                     // Get Item Resource
                     String entityid = item.attr("resourceentityid").split(",")[0];

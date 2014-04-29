@@ -363,7 +363,7 @@
     </Component>
     <Component class="javax.swing.JTextField" name="queryTxt">
       <Properties>
-        <Property name="text" type="java.lang.String" value="[href*=.box.]:not([href*=embed]):not([href*=static]),[src*=.box.]:not([src*=embed]:not([src*=static])),[value*=.box.]:not([value*=embed]):not([value*=static])"/>
+        <Property name="text" type="java.lang.String" value="[href*=.box.]:not([href*=embed]):not([href*=static]):not(a[target*=blank]),[src*=.box.]:not([src*=embed]:not([src*=static])),[value*=.box.]:not([value*=embed]):not([value*=static])"/>
         <Property name="toolTipText" type="java.lang.String" value=""/>
       </Properties>
     </Component>

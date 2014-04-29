@@ -203,7 +203,7 @@ public class LinkGUI extends javax.swing.JFrame {
 
         jLabel5.setText("Query");
 
-        queryTxt.setText("[href*=.box.]:not([href*=embed]):not([href*=static]),[src*=.box.]:not([src*=embed]:not([src*=static])),[value*=.box.]:not([value*=embed]):not([value*=static])");
+        queryTxt.setText("[href*=.box.]:not([href*=embed]):not([href*=static]):not(a[target*=blank]),[src*=.box.]:not([src*=embed]:not([src*=static])),[value*=.box.]:not([value*=embed]):not([value*=static])");
         queryTxt.setToolTipText("");
 
         jMenuBar1.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(172, 172, 172)));
@@ -427,7 +427,7 @@ public class LinkGUI extends javax.swing.JFrame {
                 ls.dlapGetItemList(courseid);
                 String query = queryTxt.getText();
                 ls.run(query);
-                showBroken(ls.displayBrokenLinks());
+                //showBroken(ls.displayBrokenLinks());
                 this.interrupt();
                 auditBtn.setEnabled(true);
                 displayArea.setEnabled(true);
