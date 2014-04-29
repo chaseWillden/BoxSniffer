@@ -48,6 +48,7 @@ public final class BoxSniffer {
     private List listCourses = new ArrayList();
     private int totalDlap = 0;
     private double totalItems = 0.0;
+    private int totalQueriedElements = 0;
     private double progress = 1.0;
     private boolean isRunning = false;
     private String baseCourseid = "";
@@ -72,7 +73,7 @@ public final class BoxSniffer {
         Elements items = cil.getElementsByTag("item");
         
         // Add to report CSV
-        this.queriedItems.add("\nCourse Id, Item Id, Item Title, Link");
+        this.queriedItems.add("\nCourse Id, Item Id, Item Title, Total Elements, Link");
         
         for (Element item: items) {
             // Each time it loops, it sets a wait, even if it's zero
@@ -102,11 +103,13 @@ public final class BoxSniffer {
                         // Gets query, checks item size
                         Elements eles = checkElementSize(getQuery(query, content));
                         if (eles != null) {
-                            
+                            // Add to total
+                            this.totalQueriedElements += eles.size();
                             // Adds csv to Report
                             String d = "\n" + entityid;
                             d += "," + id;
                             d += "," + title;
+                            d += "," + eles.size();
                             d += ",https://byui.brainhoney.com/Frame/Component/CoursePlayer?enrollmentid=" + entityid + "&itemid=" + id;
                             this.queriedItems.add(d);
                         }
@@ -120,6 +123,8 @@ public final class BoxSniffer {
                     String content = "<html><head></head><body><div><a href='" + url + "'>Asset Link</a><a href='https://google.com'>Google</a></div></body></html>";
                     Elements eles = checkElementSize(getQuery(query, content));
                     if (eles != null) {
+                        // Add to total
+                        this.totalQueriedElements += eles.size();
                         
                         // Create report as CSV
                         String entityid = item.attr("resourceentityid").split(",")[0];
@@ -128,6 +133,7 @@ public final class BoxSniffer {
                         String d = "\n" + entityid;
                         d += "," + id;
                         d += "," + title;
+                        d += "," + eles.size();
                         d += ",https://byui.brainhoney.com/Frame/Component/CoursePlayer?enrollmentid=" + entityid + "&itemid=" + id;
                         this.queriedItems.add(d);
                     }
@@ -313,7 +319,8 @@ public final class BoxSniffer {
             return display + "\nNo Queried Items";
         }
         display += "\nAudit Report";
-        display += "\nTotal Queried Items," + (this.queriedItems.size() - 1) + "\n";
+        display += "\nTotal Queried Items," + (this.queriedItems.size() - 1);
+        display += "\nTotal Queried Elements, " + (this.totalQueriedElements) + "\n";
         int size = this.queriedItems.size();
         for (int i = 0; i < size; i++) {
             String linkInfo = this.queriedItems.get(i).toString();
