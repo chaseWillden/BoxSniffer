@@ -1,10 +1,11 @@
 /*
  * Author: Chase Willden
- * 
+ *
  * Error Numbers:
- * 132: Ping Error
- * 133: Login Error
- * 136: Dlap getresource error
+ * 1: Unable to connect
+ * 100+ - Logging in Issues
+ * 200+ - Dlap Call Issues
+ * 300+ - System Issues
  */
 package boxsniffer;
 
@@ -14,8 +15,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
@@ -29,7 +28,7 @@ import org.xml.sax.SAXException;
  *
  * @author willdech
  */
-public class BoxSniffer {
+public final class BoxSniffer {
 
     /**
      * The first letter 'd' indicates that this is a result from a Dlap
@@ -44,92 +43,136 @@ public class BoxSniffer {
     private List errorLog = new ArrayList();
     private Document dCourseItemList;
     private Session session;
-    private List brokenLinks = new ArrayList();
+    private List queriedItems = new ArrayList();
     private String baseUrl;
-    private List allCourses = new ArrayList();
     private List listCourses = new ArrayList();
-    private int totalPinged = 0;
-    private int totalExt = 0;
-    private int totalInt = 0;
-    private int totalImg = 0;
     private int totalDlap = 0;
-    private int itemsSelected = 0;
     private double totalItems = 0.0;
     private double progress = 1.0;
     private boolean isRunning = false;
     private String baseCourseid = "";
-    private String uName = "";
     private boolean interrupt = false;
+    protected int linkCount = 0;
 
     /**
-     * <!-- begin-user-doc -->
-     * <!-- end-user-doc --> @generated
+     * Box Sniffer Constructor
      */
     public BoxSniffer() {
         try {
             this.session = new Session("Link Sniffer", "http://gls.agilix.com/dlap.ashx");
         } catch (TransformerConfigurationException | ParserConfigurationException ex) {
-            Logger.getLogger(LinkSnifferNew.class.getName()).log(Level.SEVERE, null, ex);
+            addError("1", "Sniffer couldn't connect"); 
         }
+    }    
+    
+    public void run(String query) {
+        Document cil = getCourseItemList();
+        this.totalItems = cil.getElementsByTag("item").size();
+        this.isRunning = true;
+        Elements items = cil.getElementsByTag("item");
+        
+        // Add to report CSV
+        this.queriedItems.add("\nCourse Id, Item Id, Item Title, Link");
+        
+        for (Element item: items) {
+            // Each time it loops, it sets a wait, even if it's zero
+            setWait();
+            this.progress++;
+            Elements typeTag = item.getElementsByTag("type");
+            
+            // Double check item if it has type
+            if (!typeTag.isEmpty()) {
+                String itemType = typeTag.get(0).text();
+                
+                // Check item type, needs to check all types
+                if (itemType.contains("Resource") || itemType.contains("Assignment") || itemType.contains("Discussion") || itemType.contains("Homework")) {
+                    
+                    // Get Item Resource
+                    String entityid = item.attr("resourceentityid").split(",")[0];
+                    String path = item.getElementsByTag("href").text();                    
+                    String content = dlapGetResource(entityid, path);                    
+                    
+                    if (content != null) {
+                        // Get Broken Box Links
+                        String id = item.attr("id");
+                        String title = item.getElementsByTag("title").text();
+                        
+                        // Gets query, checks item size
+                        Elements eles = checkElementSize(getQuery(query, content));
+                        if (eles != null) {
+                            
+                            // Adds csv to Report
+                            String d = "\n" + entityid;
+                            d += "," + id;
+                            d += "," + title;
+                            d += ",https://byui.brainhoney.com/Frame/Component/CoursePlayer?enrollmentid=" + entityid + "&itemid=" + id;
+                            this.queriedItems.add(d);
+                        }
+                    }
+                } 
+                // If the activity is an AssetLink
+                else if (itemType.contains("AssetLink")) {
+                    String url = item.getElementsByTag("href").get(0).text();
+                    
+                    // Create a simple webpage so parser can parse.
+                    String content = "<html><head></head><body><div><a href='" + url + "'>Asset Link</a><a href='https://google.com'>Google</a></div></body></html>";
+                    Elements eles = checkElementSize(getQuery(query, content));
+                    if (eles != null) {
+                        
+                        // Create report as CSV
+                        String entityid = item.attr("resourceentityid").split(",")[0];
+                        String id = item.attr("id");
+                        String title = item.getElementsByTag("title").text();
+                        String d = "\n" + entityid;
+                        d += "," + id;
+                        d += "," + title;
+                        d += ",https://byui.brainhoney.com/Frame/Component/CoursePlayer?enrollmentid=" + entityid + "&itemid=" + id;
+                        this.queriedItems.add(d);
+                    }
+                }
+            }
+        }
+        
+        // After looping through all items, set isRunning to false
+        this.isRunning = false;
     }
     
-    public void reset(){
-        dCourseActivityDOM = new ArrayList();
-        errorLog = new ArrayList();
-        dCourseItemList = null;
-        brokenLinks = new ArrayList();
-        baseUrl = "";
-        allCourses = new ArrayList();
-        listCourses = new ArrayList();
-        totalPinged = 0;
-        totalExt = 0;
-        totalInt = 0;
-        totalDlap = 0;
-        totalItems = 0.0;
-        progress = 1.0;
-        isRunning = false;
-        baseCourseid = "";
-    }
-
-
     /**
-     * Adds Errors to the Error log.
-     * <!-- begin-user-doc -->
-     * <!-- end-user-doc -->
-     *
-     * @param errorNum
-     * @param errorMsg
-     * @generated
-     * @ordered
+     * Parse as webpage and queries document.
+     * @param query
+     * @param content
+     * @return 
      */
-    public void addError(String errorNum, String errorMsg) {
-        this.errorLog.add(errorNum + ": " + errorMsg);
+    public Elements getQuery(String query, String content) {
+        return Jsoup.parse(content).select(query);
     }
-
+    
     /**
-     * Sets the base url
-     * <!-- begin-user-doc -->
-     * <!-- end-user-doc -->
-     *
-     * @param url
-     * @generated
-     * @ordered
+     * Check size of Elements
+     * @param eles
+     * @return 
      */
-    public void setUrl(String url) {
-        this.baseUrl = url;
+    public Elements checkElementSize(Elements eles) {
+        if (eles.size() > 0) {
+            return eles;
+        }
+        return null;
     }
 
+    
+    
+    
+    
+    
+    
+    // Dlap Calls
+    
     /**
-     * Login to Brainhoney's API through "http://gls.agilix.com/dlap.ashx".
-     * <!-- begin-user-doc -->
-     * <!-- end-user-doc -->
-     *
+     * Login - DLAP Call.
      * @param username
      * @param password
      * @param prefix
-     * @return
-     * @generated
-     * @ordered
+     * @return 
      */
     public boolean login(String username, String password, String prefix) {
         // Login
@@ -142,36 +185,26 @@ public class BoxSniffer {
             this.totalDlap++;
             System.out.println(result);
         } catch (ParserConfigurationException | TransformerException | IOException | SAXException ex) {
-            Logger.getLogger(LinkSnifferNew.class.getName()).log(Level.SEVERE, null, ex);
+            addError("100", "Couldn't login");
         }
         if (!Session.IsSuccess(result)) {
-            addError("133", "Unable to login: " + Session.GetMessage(result));
+            addError("101", "Unable to login: " + Session.GetMessage(result));
             return false;
         }
-        this.uName = result.getElementsByTag("user").get(0).attr("firstname") + " " + result.getElementsByTag("user").get(0).attr("lastname");
         return true;
-    }
-    
-    public String getUser(){
-        return this.uName;
-    }
+    }    
 
     /**
-     * Using Brainhoney's DLAP call, it gets the "html" content of the activity.
-     * <!-- begin-user-doc -->
-     * <!-- end-user-doc -->
-     *
+     * Get the course resource
      * @param entityid
      * @param path
-     * @return
-     * @generated
-     * @ordered
+     * @return 
      */
     public String dlapGetResource(String entityid, String path) {
         if (entityid.isEmpty() || path.isEmpty()) {
             return null;
         }
-        Map<String, String> params = new HashMap<>();
+        Map < String, String > params = new HashMap < > ();
         params.put("entityid", entityid);
         params.put("path", path);
         try {
@@ -182,148 +215,48 @@ public class BoxSniffer {
             }
             return r.toString();
         } catch (TransformerException | IOException | ParserConfigurationException | SAXException ex) {
-            addError("136", "Resource couldn't be downloaded");
+            addError("200", "Resource couldn't be downloaded");
         }
         return null;
     }
 
     /**
-     * <!-- begin-user-doc -->
-     * <!-- end-user-doc --> @generated @ordered
+     * Dlap Logout
      */
     public void logout() {
         try {
             this.session.Logout();
             this.totalDlap++;
         } catch (TransformerException | IOException | ParserConfigurationException | SAXException ex) {
-            Logger.getLogger(LinkSnifferNew.class.getName()).log(Level.SEVERE, null, ex);
+            addError("102", "Couldn't Logout");
         }
-    }
-
-    protected int linkCount = 0;
+    }    
 
     /**
-     * get list of all items within a course using the Brainhoney Dlap call
-     * "getitemlist" and setting it into a global variable which can be accessed
-     * by getItemInfo
-     * <!-- begin-user-doc -->
-     * <!-- end-user-doc -->
-     *
-     * @param courseId
-     * @generated
-     * @ordered
+     * Dlap, Returns list of Items
+     * @param courseId 
      */
     public void dlapGetItemList(String courseId) {
         // TODO : to implement	
         this.baseCourseid = courseId;
-        Map<String, String> getitemlist = new HashMap<>();
+        Map < String, String > getitemlist = new HashMap < > ();
         getitemlist.put("entityid", courseId);
         session.setIsHtml(true);
         try {
             this.dCourseItemList = session.Get("getitemlist", getitemlist);
             this.totalDlap++;
         } catch (TransformerException | IOException | ParserConfigurationException | SAXException ex) {
-            Logger.getLogger(LinkSnifferNew.class.getName()).log(Level.SEVERE, null, ex);
+            addError("201", "Couldn't execute getItemList Dlap Call");
         }
-    }
-
-    /**
-     * Get the list of course items set by dlapGetItemList()
-     *
-     * @return
-     * @generated
-     * @ordered
-     */
-    public Document getCourseItemList() {
-        return this.dCourseItemList;
-    }
-
-    /**
-     * Returns the dItemInfo
-     * <!-- begin-user-doc -->
-     * <!-- end-user-doc -->
-     *
-     * @return
-     * @generated
-     * @ordered
-     */
-    public List getCourseActivityDOM() {
-        return this.dCourseActivityDOM;
-    }
-
-    public String bhLink(String id){
-        Map<String, String> params = new HashMap<>();
-        params.put("entityid", baseCourseid);
-        params.put("itemid", id);
-        try {
-            Document all = session.Get("getitem", params);
-            this.totalDlap++;
-            if (all.getElementsByTag("href") == null || all.getElementsByTag("href").size() < 1){
-                return "https://google.com";
-            }
-            String href = "http://gls.agilix.com/dlap.ashx?cmd=getresource&entityid=" + baseCourseid + "&path=" + all.getElementsByTag("href").get(0).text();
-            Map<String, String> newParams = new HashMap<>();
-            newParams.put("entityid", baseCourseid);
-            newParams.put("path", all.getElementsByTag("href").get(0).text());
-            if (all.getElementsByTag("href").get(0).text().contains("://")){
-                return all.getElementsByTag("href").get(0).text();
-            }
-            Document a = session.Get("getresource", newParams);            
-            this.totalDlap++;
-            if (a == null){
-                // Broken on purpose
-                System.out.println(all.toString());
-                return "https://google.com/brokenOnPurpose.html";
-            }            
-            if (a.getElementById("header") != null){
-                if (a.getElementById("header").toString().contains("Error")){
-                    // Broken on purpose
-                    return "https://google.com/brokenOnPurpose.html";
-                }
-            }
-            else{
-                // The link worked, but I didn't want to figure this out, it works.
-                return "https://google.com";
-            }
-        }   catch (TransformerException | IOException | ParserConfigurationException | SAXException ex) {
-            Logger.getLogger(LinkSnifferNew.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return "https://google.com";
-    }
+    }       
     
     /**
-     * Returns a string of all the broken links
-     * <!-- begin-user-doc -->
-     * <!-- end-user-doc -->
-     *
-     * @return
-     * @generated
-     * @ordered
+     * Dlap, sets list of domain level courses
+     * @param domainid
+     * @return 
      */
-    public String displayBrokenLinks() {
-        // TODO : to implement
-        String display = "Analytics\n";
-        display += "\nTotal Dlap Calls," + this.totalDlap;
-        if (this.brokenLinks.isEmpty()) {
-            return display + "\nNo Queried Items";
-        }
-        display += "\nAudit Report";
-        display += "\nTotal Queried Items," + (this.brokenLinks.size() - 1) + "\n";
-        int size = this.brokenLinks.size();
-        for (int i = 0; i < size; i++) {
-            String linkInfo = this.brokenLinks.get(i).toString();
-            display += linkInfo;
-        }
-        return display;
-    }
-
-    public double progress() {
-        DecimalFormat df = new DecimalFormat("#.##");
-        return Double.parseDouble(df.format((this.progress / this.totalItems) * 100));
-    }
-
     public boolean getDomainCourses(String domainid) {
-        Map<String, String> params = new HashMap<>();
+        Map < String, String > params = new HashMap < > ();
         params.put("domainid", domainid);
         params.put("limit", "0");
         try {
@@ -331,7 +264,7 @@ public class BoxSniffer {
             this.totalDlap++;
             if (all.getElementsByTag("response").get(0).attr("code").equals("OK")) {
                 Elements courses = all.getElementsByTag("course");
-                for (Element course : courses) {
+                for (Element course: courses) {
                     this.listCourses.add(course.attr("title") + "::" + course.attr("id"));
                 }
                 return true;
@@ -339,99 +272,139 @@ public class BoxSniffer {
                 return false;
             }
         } catch (TransformerException | IOException | ParserConfigurationException | SAXException ex) {
-            addError("483", "Couldn't get list of courses");
+            addError("202", "Couldn't get list of courses");
         }
         return false;
+    }  
+
+    
+
+    
+    
+    
+    
+    
+    
+    // Object / Attribute related functions
+    // Getters / Setters
+    
+    public String displayErrorMsgs(){
+        String display = "";
+        display += "Error Messages: \n";
+        int size = this.errorLog.size();
+        String info = "";
+        for (int i = 0; i < size; i++){
+            display = this.errorLog.get(i).toString();
+        }
+        return display;
+    }
+    
+    /**
+     * Returns an Audit of the progress and query
+     * @return 
+     */
+    public String displayBrokenLinks() {
+        // TODO : to implement
+        String display = "Analytics\n";
+        display += "\nTotal Dlap Calls," + this.totalDlap;
+        if (this.queriedItems.isEmpty()) {
+            return display + "\nNo Queried Items";
+        }
+        display += "\nAudit Report";
+        display += "\nTotal Queried Items," + (this.queriedItems.size() - 1) + "\n";
+        int size = this.queriedItems.size();
+        for (int i = 0; i < size; i++) {
+            String linkInfo = this.queriedItems.get(i).toString();
+            display += linkInfo;
+        }
+        return display;
+    }  
+    
+    /**
+     * Set Error Message
+     * @param errorNum
+     * @param errorMsg 
+     */
+    public void addError(String errorNum, String errorMsg) {
+        this.errorLog.add(errorNum + ": " + errorMsg);
+    }
+    
+    /**
+     * Set the base URL
+     * @param url 
+     */
+    public void setUrl(String url) {
+        this.baseUrl = url;
+    }
+    
+    /**
+     * Get Course Item List
+     * @return 
+     */
+    public Document getCourseItemList() {
+        return this.dCourseItemList;
     }
 
+    /**
+     * List Courses
+     * @return 
+     */
+    public List getAllCourses() {
+        return this.listCourses;
+    }
+    
+    /**
+     * Get the progress of the sniffer
+     * @return 
+     */
+    public double progress() {
+        DecimalFormat df = new DecimalFormat("#.##");
+        return Double.parseDouble(df.format((this.progress / this.totalItems) * 100));
+    }
+    
+    /**
+     * Checks if tool is still running or if it completed its cycle
+     * @return 
+     */
     public boolean isRunning() {
         return this.isRunning;
     }
     
-    public void setWait(){
-        try {
-            while(this.interrupt){
-                Thread.sleep(10);
-            }
-        } catch (InterruptedException ex) {
-            Logger.getLogger(LinkSnifferNew.class.getName()).log(Level.SEVERE, null, ex);
-        }
-    }
-    
-    public void setInterrupt(boolean i){
+    /**
+     * Interrupt for however long. Called by setWait with an infinite loop
+     * @param i 
+     */
+    public void setInterrupt(boolean i) {
         this.interrupt = i;
     }
     
-    public Elements getQuery(String query, String content){
-        return Jsoup.parse(content).select(query);
-    }
-    
-    public Elements checkBoxLinks(Elements eles){
-        if (eles.size() > 0){
-            return eles;
-        }
-        return null;
-    }
-    
-    public void run(String query) {
-        Document cil = getCourseItemList();
-        this.totalItems = cil.getElementsByTag("item").size();
-        this.isRunning = true;
-        Elements items = cil.getElementsByTag("item");
-        this.brokenLinks.add("\nCourse Id, Item Id, Item Title, Link");
-        for (Element item : items) {
-            setWait();
-            this.progress++;
-            System.out.println("Progress: " + progress() + "%");
-            Elements typeTag = item.getElementsByTag("type");            
-            if (!typeTag.isEmpty()) {
-                String itemType = typeTag.get(0).text();
-                if (itemType.contains("Resource") || itemType.contains("Assignment") || itemType.contains("Discussion") || itemType.contains("Homework")) {
-                    String entityid = item.attr("resourceentityid").split(",")[0];
-                    String path = item.getElementsByTag("href").text();
-                    String id = item.attr("id");
-                    String content = dlapGetResource(entityid, path);
-                    String title = item.getElementsByTag("title").text();
-                    if (content != null) {
-                        // Get Broken Box Links
-                        Elements eles = checkBoxLinks(getQuery(query, content));
-                        if (eles != null && !eles.toString().contains("embed")){
-                            String d = "\n" + entityid;
-                            d += "," + id;
-                            d += "," + title;
-                            d += ",https://byui.brainhoney.com/Frame/Component/CoursePlayer?enrollmentid=" + entityid + "&itemid=" + id;
-                            this.brokenLinks.add(d);
-                        }
-                    }
-                }
-                else if(itemType.contains("AssetLink")){
-                    String url = item.getElementsByTag("href").get(0).text();
-                    // If broken
-                    String content = "<html><head></head><body><div><a href='" + url +"'>Asset Link</a><a href='https://google.com'>Google</a></div></body></html>";
-                    Elements eles = checkBoxLinks(getQuery(query, content));
-                    if (eles != null && !eles.toString().contains("embed")){
-                        String entityid = item.attr("resourceentityid").split(",")[0];
-                        String id = item.attr("id");
-                        String title = item.getElementsByTag("title").text();
-                        String d = "\n" + entityid;
-                        d += "," + id;
-                        d += "," + title;
-                        d += ",https://byui.brainhoney.com/Frame/Component/CoursePlayer?enrollmentid=" + entityid + "&itemid=" + id;
-                        this.brokenLinks.add(d);
-                    }
-                }
+    /**
+     * Pause the thread / Tool
+     */
+    public void setWait() {
+        try {
+            while (this.interrupt) {
+                Thread.sleep(10);
             }
+        } catch (InterruptedException ex) {
+            addError("300", "Unable to pause thread");
         }
-        String display = displayBrokenLinks();
-        if (display.isEmpty()) {
-            System.out.println("Your Course contains no broken links");
-        } else {
-            System.out.println(display);
-        }
-        this.isRunning = false;        
     }
-
-    public List getAllCourses() {
-        return this.listCourses;
+    
+    /**
+     * Reset the values
+     */
+    public void reset() {
+        dCourseActivityDOM = new ArrayList();
+        errorLog = new ArrayList();
+        dCourseItemList = null;
+        queriedItems = new ArrayList();
+        baseUrl = "";
+        listCourses = new ArrayList();
+        totalDlap = 0;
+        totalItems = 0.0;
+        progress = 1.0;
+        isRunning = false;
+        baseCourseid = "";
     }
 }
