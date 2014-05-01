@@ -162,7 +162,7 @@ public class Session {
         InputStream responseStream = connection.getInputStream();
         String s = getStringFromInputStream(responseStream);
         org.jsoup.nodes.Document response = null;
-        if (isHtml) {
+        if (isIsHtml()) {
             response = Jsoup.parse(s);
         } else {
             Parser xparser = Parser.xmlParser();
@@ -194,7 +194,7 @@ public class Session {
         this.isHtml = setHTML;
     }
 
-    protected boolean isHtml = false;
+    private boolean isHtml = false;
 
     private static String getStringFromInputStream(InputStream is) {
 
@@ -238,5 +238,12 @@ public class Session {
             }
         }
         return "Unknown error";
+    }
+
+    /**
+     * @return the isHtml
+     */
+    public boolean isIsHtml() {
+        return isHtml;
     }
 }

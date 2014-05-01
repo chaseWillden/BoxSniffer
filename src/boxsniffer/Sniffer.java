@@ -12,6 +12,7 @@ package boxsniffer;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,13 +44,14 @@ public final class Sniffer {
      * @generated
      * @ordered
      */
-    private List dCourseActivityDOM = new ArrayList();
-    private List errorLog = new ArrayList();
+    private List<Document> dCourseActivityDOM = new ArrayList<>();
+    private List<String> errorLog = new ArrayList<>();
+    private Document enrollmentList;
     private Document dCourseItemList;
     private Session session;
-    private List queriedItems = new ArrayList();
+    private List<String> queriedItems = new ArrayList<>();
     private String baseUrl;
-    private List listCourses = new ArrayList();
+    private List<String> listCourses;
     private int totalDlap = 0;
     private double totalItems = 0.0;
     private int totalQueriedElements = 0;
@@ -57,15 +59,21 @@ public final class Sniffer {
     private boolean isRunning = false;
     private String baseCourseid = "";
     private boolean interrupt = false;
-    protected int linkCount = 0;
+    private int linkCount = 0;
     private BlockingQueue<Element> queue = new LinkedBlockingQueue<>(3);
     private String query = "";
-    ThreadPool pool = new ThreadPool(Runtime.getRuntime().availableProcessors());
+    private ThreadPool pool = new ThreadPool(Runtime.getRuntime().availableProcessors());
+    private boolean showElements = true;
+    private boolean showEnrollments = false;
+    private int totalStudents = 0;
+    private int totalActiveStudents = 0;
+    private int activeStudents = 0;
 
     /**
      * Box Sniffer Constructor
      */
     public Sniffer() {
+        this.listCourses = new ArrayList<>();
         try {
             this.session = new Session("Link Sniffer", "http://gls.agilix.com/dlap.ashx");
         } catch (TransformerConfigurationException | ParserConfigurationException ex) {
@@ -80,8 +88,12 @@ public final class Sniffer {
         Elements items = cil.getElementsByTag("item");
 
         // Add to report CSV
-        this.queriedItems.add("\nCourse Id, Item Id, Item Title, Total Elements, Link");
-        
+        if (isShowElements()) {
+            this.queriedItems.add("\nCourse Id, Item Id, Item Title, Total Elements, Link, Element");
+        } else {
+            this.queriedItems.add("\nCourse Id, Item Id, Item Title, Total Elements, Link");
+        }
+
         queue = new LinkedBlockingQueue<>(3);
         this.query = query;
         for (final Element item : items) {
@@ -96,9 +108,65 @@ public final class Sniffer {
                     }
                 }
             };
-            pool.addTask(g);
-            pool.addTask(new Consumer());
-        }        
+            getPool().addTask(g);
+            getPool().addTask(new Consumer());
+        }
+    }
+
+    /**
+     * @return the linkCount
+     */
+    public int getLinkCount() {
+        return linkCount;
+    }
+
+    /**
+     * @param linkCount the linkCount to set
+     */
+    public void setLinkCount(int linkCount) {
+        this.linkCount = linkCount;
+    }
+
+    /**
+     * @return the pool
+     */
+    public ThreadPool getPool() {
+        return pool;
+    }
+
+    /**
+     * @param pool the pool to set
+     */
+    public void setPool(ThreadPool pool) {
+        this.pool = pool;
+    }
+
+    /**
+     * @return the showElements
+     */
+    public boolean isShowElements() {
+        return showElements;
+    }
+
+    /**
+     * @param showElements the showElements to set
+     */
+    public void setShowElements(boolean showElements) {
+        this.showElements = showElements;
+    }
+
+    /**
+     * @return the showEnrollments
+     */
+    public boolean isShowEnrollments() {
+        return showEnrollments;
+    }
+
+    /**
+     * @param showEnrollments the showEnrollments to set
+     */
+    public void setShowEnrollments(boolean showEnrollments) {
+        this.showEnrollments = showEnrollments;
     }
 
     private class Consumer implements Runnable {
@@ -110,9 +178,9 @@ public final class Sniffer {
                 itemThread(queue.take(), q);
                 progress++;
                 // After looping through all items, set isRunning to false
-                if (progress() > 99.0){
+                if (progress() > 99.0) {
                     isRunning = false;
-                    pool.stopThreads();
+                    getPool().stopThreads();
                     System.gc();
                 }
             } catch (InterruptedException ex) {
@@ -156,6 +224,9 @@ public final class Sniffer {
                         d += "," + title;
                         d += "," + eles.size();
                         d += ",https://byui.brainhoney.com/Frame/Component/CoursePlayer?enrollmentid=" + entityid + "&itemid=" + id;
+                        if (isShowElements()){
+                            d += "," + eles.outerHtml();
+                        }
                         this.queriedItems.add(d);
                     }
                 }
@@ -183,6 +254,17 @@ public final class Sniffer {
                 }
             }
         }
+    }
+    
+    public void auditEnrollments(){
+        Elements enrollments = this.enrollmentList.select("enrollment[privileges=2228225]");
+        this.activeStudents = 0;
+        this.totalStudents = enrollments.size();
+        for (Element e : enrollments){
+            this.totalActiveStudents++;
+            this.activeStudents++;
+        }
+        this.enrollmentList = null;
     }
 
     /**
@@ -276,6 +358,24 @@ public final class Sniffer {
             addError("102", "Couldn't Logout");
         }
     }
+    
+    /**
+     * Dlap call to get all enrollments
+     * @param courseId 
+     */
+    public void DlapListEntityEnrollments(String courseId){
+        this.baseCourseid = courseId;
+        Map< String, String> getEnrollments = new HashMap<>();
+        getEnrollments.put("entityid", courseId);
+        getEnrollments.put("allstatus", "true");
+        session.setIsHtml(true);
+        try {
+            this.enrollmentList = session.Get("listentityenrollments", getEnrollments);
+            this.totalDlap++;
+        } catch (TransformerException | IOException | ParserConfigurationException | SAXException ex) {
+            addError("201", "Couldn't execute getItemList Dlap Call");
+        }
+    }
 
     /**
      * Dlap, Returns list of Items
@@ -342,17 +442,24 @@ public final class Sniffer {
      *
      * @return
      */
-    public String displayBrokenLinks() {
+    public String displayCourseAudit() {
         // TODO : to implement
         String display = "Analytics\n";
         display += "\nTotal Dlap Calls," + this.totalDlap;
+        if (this.isShowEnrollments()){
+            display += "\n\nEnrollment Audit";
+            display += "\nTotal Students," + this.totalStudents;
+            display += "\nTotal Active Students for this course," + this.activeStudents;
+            return display;
+        }
         if (this.queriedItems.isEmpty()) {
             return display + "\nNo Queried Items";
         }
         display += "\nAudit Report";
-        display += "\nTotal Items in Course," + (int) this.totalItems;
+        display += "\nTotal Items in Course," + this.totalItems;
         display += "\nTotal Queried Items," + (this.queriedItems.size() - 1);
         display += "\nTotal Queried Elements, " + (this.totalQueriedElements) + "\n";
+        
         int size = this.queriedItems.size();
         for (int i = 0; i < size; i++) {
             String linkInfo = this.queriedItems.get(i).toString();
@@ -394,8 +501,8 @@ public final class Sniffer {
      *
      * @return
      */
-    public List getAllCourses() {
-        return this.listCourses;
+    public List<String> getAllCourses() {
+        return Collections.unmodifiableList(this.listCourses);
     }
 
     /**
@@ -443,12 +550,12 @@ public final class Sniffer {
      * Reset the values
      */
     public void reset() {
-        dCourseActivityDOM = new ArrayList();
-        errorLog = new ArrayList();
+        dCourseActivityDOM = new ArrayList<>();
+        errorLog = new ArrayList<>();
         dCourseItemList = null;
-        queriedItems = new ArrayList();
+        queriedItems = new ArrayList<>();
         baseUrl = "";
-        listCourses = new ArrayList();
+        listCourses = new ArrayList<>();
         totalDlap = 0;
         totalItems = 0.0;
         progress = 1.0;

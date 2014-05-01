@@ -32,13 +32,14 @@ import javax.swing.event.AncestorListener;
  * @author willdech
  */
 public class LinkGUI extends javax.swing.JFrame {
+    private static final long serialVersionUID = 1L;
     
-    private Sniffer ls = new Sniffer();
-    private List allCourses = new ArrayList();
+    private final Sniffer ls = new Sniffer();
+    private List<String> allCourses = new ArrayList<>();
     private ListModel listModel;
     private int selected = 0;
-    Thread audit = null;
-    Thread prog = null;
+    private Thread audit = null;
+    private Thread prog = null;
     
     /**
      * Creates new form LinkGUI
@@ -116,6 +117,8 @@ public class LinkGUI extends javax.swing.JFrame {
         jMenuItem5 = new javax.swing.JMenuItem();
         jMenu3 = new javax.swing.JMenu();
         jMenuItem6 = new javax.swing.JMenuItem();
+        showElements = new javax.swing.JCheckBoxMenuItem();
+        showEnrollments = new javax.swing.JCheckBoxMenuItem();
         jMenu4 = new javax.swing.JMenu();
         jMenuItem7 = new javax.swing.JMenuItem();
         jMenu2 = new javax.swing.JMenu();
@@ -274,6 +277,23 @@ public class LinkGUI extends javax.swing.JFrame {
             }
         });
         jMenu3.add(jMenuItem6);
+
+        showElements.setSelected(true);
+        showElements.setText("Show Elements");
+        showElements.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                showElementsActionPerformed(evt);
+            }
+        });
+        jMenu3.add(showElements);
+
+        showEnrollments.setText("Enrollment Audit");
+        showEnrollments.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                showEnrollmentsActionPerformed(evt);
+            }
+        });
+        jMenu3.add(showEnrollments);
 
         jMenuBar1.add(jMenu3);
 
@@ -448,33 +468,51 @@ public class LinkGUI extends javax.swing.JFrame {
     private boolean running = false;
     public void startProcess(){
         this.ls.reset();
-        final String courseid = this.pickCourse.getSelectedValue().toString().split("::")[1];
-        ls.dlapGetItemList(courseid);
-        String query = queryTxt.getText();
-        running = true;    
-        ls.run(query);
-        //showBroken(ls.displayBrokenLinks());
-        auditBtn.setEnabled(true);
-        displayArea.setEnabled(true); 
-        prog = new Thread(){
-            @Override
-            public void run() {
-                while(running){
-                    if (ls.isRunning()){
-                        setProgress();
-                        displayArea.setText(ls.displayBrokenLinks());
-                    }
-                    else{
-                        running = false;
-                        auditBtn.setEnabled(true);
+        String courseid = this.pickCourse.getSelectedValue().toString().split("::")[1];        
+        if (ls.isShowEnrollments()){
+            List courses = this.pickCourse.getSelectedValuesList();
+            int size = courses.size();
+            String audit = "";
+            for (int i = 0; i < size; i++){
+                courseid = courses.get(i).toString().split("::")[1];
+                ls.DlapListEntityEnrollments(courseid);
+                ls.auditEnrollments();
+                String c = courses.get(i).toString().split("::")[0];
+                audit += "\n\n\n" + c + "\n" + ls.displayCourseAudit();
+            }
+            
+            displayArea.setText(audit);
+            auditBtn.setEnabled(true);
+            displayArea.setEnabled(true);
+        }
+        else{
+            ls.dlapGetItemList(courseid);
+            String query = queryTxt.getText();
+            running = true;    
+            ls.run(query);
+            //showBroken(ls.displayBrokenLinks());
+            auditBtn.setEnabled(true);
+            displayArea.setEnabled(true); 
+            setProg(new Thread(){
+                @Override
+                public void run() {
+                    while(running){
+                        if (ls.isRunning()){
+                            setProgress();
+                            displayArea.setText(ls.displayCourseAudit());
+                        }
+                        else{
+                            running = false;
+                            auditBtn.setEnabled(true);
+                        }
                     }
                 }
-            }  
-        };        
-        this.auditBtn.setEnabled(false);
-        prog.start();
-        prog.setName("Link Sniffer");
-        displayArea.setText("Auditing course, please wait...\n\nWhile you wait, you can count how many times you blink.");
+            });        
+            this.auditBtn.setEnabled(false);
+            getProg().start();
+            getProg().setName("Link Sniffer");
+            displayArea.setText("Auditing course, please wait...\n\nWhile you wait, you can count how many times you blink.");
+        }
     }
     
     private void auditBtnActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_auditBtnActionPerformed
@@ -574,6 +612,7 @@ public class LinkGUI extends javax.swing.JFrame {
     private void jMenuItem7ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem7ActionPerformed
         // TODO add your handling code here:
         java.awt.EventQueue.invokeLater(new Runnable() {
+            @Override
             public void run() {
                 new boxsniffer.Tools.OspreyGUI().setVisible(true);
             }
@@ -614,6 +653,16 @@ public class LinkGUI extends javax.swing.JFrame {
         // TODO add your handling code here:
         this.selected = this.pickCourse.getSelectedIndex();
     }//GEN-LAST:event_pickCourseValueChanged
+
+    private void showElementsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_showElementsActionPerformed
+        // TODO add your handling code here:
+        ls.setShowElements(showElements.getState());
+    }//GEN-LAST:event_showElementsActionPerformed
+
+    private void showEnrollmentsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_showEnrollmentsActionPerformed
+        // TODO add your handling code here:
+        ls.setShowEnrollments(this.showEnrollments.getState());
+    }//GEN-LAST:event_showEnrollmentsActionPerformed
     
     public void showBroken(String brokens){
         
@@ -628,6 +677,7 @@ public class LinkGUI extends javax.swing.JFrame {
         
     }
     
+    @SuppressWarnings("unchecked")
     public void addToList(String filter){
         final String[] strings = new String[this.allCourses.size()];
         int next = 0;
@@ -641,6 +691,7 @@ public class LinkGUI extends javax.swing.JFrame {
             }
         }
         pickCourse.setModel(new javax.swing.AbstractListModel() {
+            private static final long serialVersionUID = 1L;
             @Override
             public int getSize() { return strings.length; }
             @Override
@@ -711,6 +762,36 @@ public class LinkGUI extends javax.swing.JFrame {
     private javax.swing.JScrollPane pickScroll;
     private javax.swing.JTextField queryTxt;
     private javax.swing.JTextField search;
+    private javax.swing.JCheckBoxMenuItem showElements;
+    private javax.swing.JCheckBoxMenuItem showEnrollments;
     private javax.swing.JProgressBar sniffProgress;
     // End of variables declaration//GEN-END:variables
+
+    /**
+     * @return the audit
+     */
+    public Thread getAudit() {
+        return audit;
+    }
+
+    /**
+     * @param audit the audit to set
+     */
+    public void setAudit(Thread audit) {
+        this.audit = audit;
+    }
+
+    /**
+     * @return the prog
+     */
+    public Thread getProg() {
+        return prog;
+    }
+
+    /**
+     * @param prog the prog to set
+     */
+    public void setProg(Thread prog) {
+        this.prog = prog;
+    }
 }
