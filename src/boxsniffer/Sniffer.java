@@ -15,6 +15,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
@@ -28,7 +33,7 @@ import org.xml.sax.SAXException;
  *
  * @author willdech
  */
-public final class BoxSniffer {
+public final class Sniffer {
 
     /**
      * The first letter 'd' indicates that this is a result from a Dlap
@@ -54,82 +59,99 @@ public final class BoxSniffer {
     private String baseCourseid = "";
     private boolean interrupt = false;
     protected int linkCount = 0;
+    private BlockingQueue<Element> queue = new LinkedBlockingQueue<>(3);
+    private String query = "";
+    ThreadPool pool = new ThreadPool(Runtime.getRuntime().availableProcessors());
 
     /**
      * Box Sniffer Constructor
      */
-    public BoxSniffer() {
+    public Sniffer() {
         try {
             this.session = new Session("Link Sniffer", "http://gls.agilix.com/dlap.ashx");
         } catch (TransformerConfigurationException | ParserConfigurationException ex) {
-            addError("1", "Sniffer couldn't connect"); 
+            addError("1", "Sniffer couldn't connect");
         }
-    }    
-    
-    public void run(String query) {
+    }
+
+    public void run(final String query) {
         Document cil = getCourseItemList();
         this.totalItems = cil.getElementsByTag("item").size();
         this.isRunning = true;
         Elements items = cil.getElementsByTag("item");
-        
+
         // Add to report CSV
         this.queriedItems.add("\nCourse Id, Item Id, Item Title, Total Elements, Link");
         
-        for (Element item: items) {
-            // Each time it loops, it sets a wait, even if it's zero
-            setWait();
-            this.progress++;
-            Elements typeTag = item.getElementsByTag("type");
-            
-            // Double check item if it has type
-            if (!typeTag.isEmpty()) {
-                String itemType = typeTag.get(0).text();
-                
-                // Check item type, needs to check all types
-                if (!itemType.contains("AssetLink") && !itemType.contains("Folder")
-                        && !itemType.contains("Lessons") && !itemType.contains("RssFeed")
-                        && !itemType.contains("Shortcut") && !itemType.contains("Survey")) {
-                    
-                    // Get Item Resource
-                    String entityid = item.attr("resourceentityid").split(",")[0];
-                    String path = item.getElementsByTag("href").text();                    
-                    String content = dlapGetResource(entityid, path);                    
-                    
-                    if (content != null) {
-                        // Get Broken Box Links
-                        String id = item.attr("id");
-                        String title = item.getElementsByTag("title").text();
-                        
-                        // Gets query, checks item size
-                        Elements eles = checkElementSize(getQuery(query, content));
-                        if (eles != null) {
-                            // Add to total
-                            this.totalQueriedElements += eles.size();
-                            // Adds csv to Report
-                            String d = "\n" + entityid;
-                            d += "," + id;
-                            d += "," + title;
-                            d += "," + eles.size();
-                            d += ",https://byui.brainhoney.com/Frame/Component/CoursePlayer?enrollmentid=" + entityid + "&itemid=" + id;
-                            this.queriedItems.add(d);
-                        }
+        queue = new LinkedBlockingQueue<>(3);
+        this.query = query;
+        for (final Element item : items) {
+            // Each time it loops, it sets a wait, even if it's zero 
+            Thread g = new Thread() {
+                @Override
+                public void run() {
+                    try {
+                        queue.put(item);
+                    } catch (InterruptedException ex) {
+                        Logger.getLogger(Sniffer.class.getName()).log(Level.SEVERE, null, ex);
                     }
-                } 
-                // If the activity is an AssetLink
-                else if (itemType.contains("AssetLink")) {
-                    String url = item.getElementsByTag("href").get(0).text();
-                    
-                    // Create a simple webpage so parser can parse.
-                    String content = "<html><head></head><body><div><a href='" + url + "'>Asset Link</a><a href='https://google.com'>Google</a></div></body></html>";
+                }
+            };
+            pool.addTask(g);
+            pool.addTask(new Consumer());
+        }        
+    }
+
+    private class Consumer implements Runnable {
+
+        @Override
+        public void run() {
+            try {
+                String q = query;
+                itemThread(queue.take(), q);
+                progress++;
+                // After looping through all items, set isRunning to false
+                if (progress() > 99.0){
+                    isRunning = false;
+                    pool.stopThreads();
+                    System.gc();
+                }
+            } catch (InterruptedException ex) {
+                Logger.getLogger(Sniffer.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+
+    }
+
+    public void itemThread(Element item, String query) {
+        setWait();
+        Elements typeTag = item.getElementsByTag("type");
+
+        // Double check item if it has type
+        if (!typeTag.isEmpty()) {
+            String itemType = typeTag.get(0).text();
+
+            // Check item type, needs to check all types
+            if (!itemType.contains("AssetLink") && !itemType.contains("Folder")
+                    && !itemType.contains("Lessons") && !itemType.contains("RssFeed")
+                    && !itemType.contains("Shortcut") && !itemType.contains("Survey")) {
+
+                // Get Item Resource
+                String entityid = item.attr("resourceentityid").split(",")[0];
+                String path = item.getElementsByTag("href").text();
+                String content = dlapGetResource(entityid, path);
+
+                if (content != null) {
+                    // Get Broken Box Links
+                    String id = item.attr("id");
+                    String title = item.getElementsByTag("title").text();
+
+                    // Gets query, checks item size
                     Elements eles = checkElementSize(getQuery(query, content));
                     if (eles != null) {
                         // Add to total
                         this.totalQueriedElements += eles.size();
-                        
-                        // Create report as CSV
-                        String entityid = item.attr("resourceentityid").split(",")[0];
-                        String id = item.attr("id");
-                        String title = item.getElementsByTag("title").text();
+                        // Adds csv to Report
                         String d = "\n" + entityid;
                         d += "," + id;
                         d += "," + title;
@@ -138,27 +160,48 @@ public final class BoxSniffer {
                         this.queriedItems.add(d);
                     }
                 }
+            } // If the activity is an AssetLink
+            else if (itemType.contains("AssetLink")) {
+                String url = item.getElementsByTag("href").get(0).text();
+
+                // Create a simple webpage so parser can parse.
+                String content = "<html><head></head><body><div><a href='" + url + "'>Asset Link</a><a href='https://google.com'>Google</a></div></body></html>";
+                Elements eles = checkElementSize(getQuery(query, content));
+                if (eles != null) {
+                    // Add to total
+                    this.totalQueriedElements += eles.size();
+
+                    // Create report as CSV
+                    String entityid = item.attr("resourceentityid").split(",")[0];
+                    String id = item.attr("id");
+                    String title = item.getElementsByTag("title").text();
+                    String d = "\n" + entityid;
+                    d += "," + id;
+                    d += "," + title;
+                    d += "," + eles.size();
+                    d += ",https://byui.brainhoney.com/Frame/Component/CoursePlayer?enrollmentid=" + entityid + "&itemid=" + id;
+                    this.queriedItems.add(d);
+                }
             }
         }
-        
-        // After looping through all items, set isRunning to false
-        this.isRunning = false;
     }
-    
+
     /**
      * Parse as webpage and queries document.
+     *
      * @param query
      * @param content
-     * @return 
+     * @return
      */
     public Elements getQuery(String query, String content) {
         return Jsoup.parse(content).select(query);
     }
-    
+
     /**
      * Check size of Elements
+     *
      * @param eles
-     * @return 
+     * @return
      */
     public Elements checkElementSize(Elements eles) {
         if (eles.size() > 0) {
@@ -167,20 +210,14 @@ public final class BoxSniffer {
         return null;
     }
 
-    
-    
-    
-    
-    
-    
     // Dlap Calls
-    
     /**
      * Login - DLAP Call.
+     *
      * @param username
      * @param password
      * @param prefix
-     * @return 
+     * @return
      */
     public boolean login(String username, String password, String prefix) {
         // Login
@@ -200,19 +237,20 @@ public final class BoxSniffer {
             return false;
         }
         return true;
-    }    
+    }
 
     /**
      * Get the course resource
+     *
      * @param entityid
      * @param path
-     * @return 
+     * @return
      */
     public String dlapGetResource(String entityid, String path) {
         if (entityid.isEmpty() || path.isEmpty()) {
             return null;
         }
-        Map < String, String > params = new HashMap < > ();
+        Map< String, String> params = new HashMap<>();
         params.put("entityid", entityid);
         params.put("path", path);
         try {
@@ -238,16 +276,17 @@ public final class BoxSniffer {
         } catch (TransformerException | IOException | ParserConfigurationException | SAXException ex) {
             addError("102", "Couldn't Logout");
         }
-    }    
+    }
 
     /**
      * Dlap, Returns list of Items
-     * @param courseId 
+     *
+     * @param courseId
      */
     public void dlapGetItemList(String courseId) {
         // TODO : to implement	
         this.baseCourseid = courseId;
-        Map < String, String > getitemlist = new HashMap < > ();
+        Map< String, String> getitemlist = new HashMap<>();
         getitemlist.put("entityid", courseId);
         session.setIsHtml(true);
         try {
@@ -256,15 +295,16 @@ public final class BoxSniffer {
         } catch (TransformerException | IOException | ParserConfigurationException | SAXException ex) {
             addError("201", "Couldn't execute getItemList Dlap Call");
         }
-    }     
-    
+    }
+
     /**
      * Dlap, sets list of domain level courses
+     *
      * @param domainid
-     * @return 
+     * @return
      */
     public boolean getDomainCourses(String domainid) {
-        Map < String, String > params = new HashMap < > ();
+        Map< String, String> params = new HashMap<>();
         params.put("domainid", domainid);
         params.put("limit", "0");
         try {
@@ -272,7 +312,7 @@ public final class BoxSniffer {
             this.totalDlap++;
             if (all.getElementsByTag("response").get(0).attr("code").equals("OK")) {
                 Elements courses = all.getElementsByTag("course");
-                for (Element course: courses) {
+                for (Element course : courses) {
                     this.listCourses.add(course.attr("title") + "::" + course.attr("id"));
                 }
                 return true;
@@ -283,33 +323,25 @@ public final class BoxSniffer {
             addError("202", "Couldn't get list of courses");
         }
         return false;
-    }  
+    }
 
-    
-
-    
-    
-    
-    
-    
-    
     // Object / Attribute related functions
     // Getters / Setters
-    
-    public String displayErrorMsgs(){
+    public String displayErrorMsgs() {
         String display = "";
         display += "Error Messages: \n";
         int size = this.errorLog.size();
         String info = "";
-        for (int i = 0; i < size; i++){
+        for (int i = 0; i < size; i++) {
             display = this.errorLog.get(i).toString();
         }
         return display;
     }
-    
+
     /**
      * Returns an Audit of the progress and query
-     * @return 
+     *
+     * @return
      */
     public String displayBrokenLinks() {
         // TODO : to implement
@@ -319,6 +351,7 @@ public final class BoxSniffer {
             return display + "\nNo Queried Items";
         }
         display += "\nAudit Report";
+        display += "\nTotal Items in Course," + (int) this.totalItems;
         display += "\nTotal Queried Items," + (this.queriedItems.size() - 1);
         display += "\nTotal Queried Elements, " + (this.totalQueriedElements) + "\n";
         int size = this.queriedItems.size();
@@ -327,28 +360,31 @@ public final class BoxSniffer {
             display += linkInfo;
         }
         return display;
-    }  
-    
+    }
+
     /**
      * Set Error Message
+     *
      * @param errorNum
-     * @param errorMsg 
+     * @param errorMsg
      */
     public void addError(String errorNum, String errorMsg) {
         this.errorLog.add(errorNum + ": " + errorMsg);
     }
-    
+
     /**
      * Set the base URL
-     * @param url 
+     *
+     * @param url
      */
     public void setUrl(String url) {
         this.baseUrl = url;
     }
-    
+
     /**
      * Get Course Item List
-     * @return 
+     *
+     * @return
      */
     public Document getCourseItemList() {
         return this.dCourseItemList;
@@ -356,37 +392,41 @@ public final class BoxSniffer {
 
     /**
      * List Courses
-     * @return 
+     *
+     * @return
      */
     public List getAllCourses() {
         return this.listCourses;
     }
-    
+
     /**
      * Get the progress of the sniffer
-     * @return 
+     *
+     * @return
      */
     public double progress() {
         DecimalFormat df = new DecimalFormat("#.##");
         return Double.parseDouble(df.format((this.progress / this.totalItems) * 100));
     }
-    
+
     /**
      * Checks if tool is still running or if it completed its cycle
-     * @return 
+     *
+     * @return
      */
     public boolean isRunning() {
         return this.isRunning;
     }
-    
+
     /**
      * Interrupt for however long. Called by setWait with an infinite loop
-     * @param i 
+     *
+     * @param i
      */
     public void setInterrupt(boolean i) {
         this.interrupt = i;
     }
-    
+
     /**
      * Pause the thread / Tool
      */
@@ -399,7 +439,7 @@ public final class BoxSniffer {
             addError("300", "Unable to pause thread");
         }
     }
-    
+
     /**
      * Reset the values
      */
@@ -415,5 +455,6 @@ public final class BoxSniffer {
         progress = 1.0;
         isRunning = false;
         baseCourseid = "";
+        totalQueriedElements = 0;
     }
 }

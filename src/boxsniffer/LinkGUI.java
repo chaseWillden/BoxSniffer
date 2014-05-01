@@ -33,7 +33,7 @@ import javax.swing.event.AncestorListener;
  */
 public class LinkGUI extends javax.swing.JFrame {
     
-    private BoxSniffer ls = new BoxSniffer();
+    private Sniffer ls = new Sniffer();
     private List allCourses = new ArrayList();
     private ListModel listModel;
     private int selected = 0;
@@ -113,7 +113,6 @@ public class LinkGUI extends javax.swing.JFrame {
         jMenuItem1 = new javax.swing.JMenuItem();
         jMenuItem8 = new javax.swing.JMenuItem();
         jMenuItem3 = new javax.swing.JMenuItem();
-        jMenuItem9 = new javax.swing.JMenuItem();
         jMenuItem5 = new javax.swing.JMenuItem();
         jMenu3 = new javax.swing.JMenu();
         jMenuItem6 = new javax.swing.JMenuItem();
@@ -253,15 +252,6 @@ public class LinkGUI extends javax.swing.JFrame {
             }
         });
         jMenu1.add(jMenuItem3);
-
-        jMenuItem9.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_A, java.awt.event.InputEvent.CTRL_MASK));
-        jMenuItem9.setText("Admin");
-        jMenuItem9.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jMenuItem9ActionPerformed(evt);
-            }
-        });
-        jMenu1.add(jMenuItem9);
 
         jMenuItem5.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_Q, java.awt.event.InputEvent.CTRL_MASK));
         jMenuItem5.setText("Exit");
@@ -455,35 +445,33 @@ public class LinkGUI extends javax.swing.JFrame {
         domainBtn();     
     }//GEN-LAST:event_domainBtnActionPerformed
 
+    private boolean running = false;
     public void startProcess(){
         this.ls.reset();
         final String courseid = this.pickCourse.getSelectedValue().toString().split("::")[1];
-        audit = new Thread(){
-            @Override
-            public void run() {
-                ls.dlapGetItemList(courseid);
-                String query = queryTxt.getText();
-                ls.run(query);
-                //showBroken(ls.displayBrokenLinks());
-                this.interrupt();
-                auditBtn.setEnabled(true);
-                displayArea.setEnabled(true);
-            }  
-        };  
+        ls.dlapGetItemList(courseid);
+        String query = queryTxt.getText();
+        running = true;    
+        ls.run(query);
+        //showBroken(ls.displayBrokenLinks());
+        auditBtn.setEnabled(true);
+        displayArea.setEnabled(true); 
         prog = new Thread(){
             @Override
             public void run() {
-                while(audit.isAlive()){
+                while(running){
                     if (ls.isRunning()){
                         setProgress();
                         displayArea.setText(ls.displayBrokenLinks());
                     }
+                    else{
+                        running = false;
+                        auditBtn.setEnabled(true);
+                    }
                 }
             }  
-        };
+        };        
         this.auditBtn.setEnabled(false);
-        audit.start();
-        audit.setName("Link Sniffer");
         prog.start();
         prog.setName("Link Sniffer");
         displayArea.setText("Auditing course, please wait...\n\nWhile you wait, you can count how many times you blink.");
@@ -626,16 +614,6 @@ public class LinkGUI extends javax.swing.JFrame {
         // TODO add your handling code here:
         this.selected = this.pickCourse.getSelectedIndex();
     }//GEN-LAST:event_pickCourseValueChanged
-
-    private void jMenuItem9ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem9ActionPerformed
-        // TODO add your handling code here:
-        // Admin
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                new Admin().setVisible(true);
-            }
-        });
-    }//GEN-LAST:event_jMenuItem9ActionPerformed
     
     public void showBroken(String brokens){
         
@@ -726,7 +704,6 @@ public class LinkGUI extends javax.swing.JFrame {
     private javax.swing.JMenuItem jMenuItem6;
     private javax.swing.JMenuItem jMenuItem7;
     private javax.swing.JMenuItem jMenuItem8;
-    private javax.swing.JMenuItem jMenuItem9;
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JButton loginBtn;
     private javax.swing.JButton pause;
