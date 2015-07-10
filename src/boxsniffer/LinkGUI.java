@@ -7,10 +7,14 @@
 package boxsniffer;
 
 import java.awt.GridLayout;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -109,6 +113,7 @@ public class LinkGUI extends javax.swing.JFrame {
         pause = new javax.swing.JButton();
         jLabel5 = new javax.swing.JLabel();
         queryTxt = new javax.swing.JTextField();
+        jButton1 = new javax.swing.JButton();
         jMenuBar1 = new javax.swing.JMenuBar();
         jMenu1 = new javax.swing.JMenu();
         jMenuItem1 = new javax.swing.JMenuItem();
@@ -219,8 +224,15 @@ public class LinkGUI extends javax.swing.JFrame {
 
         jLabel5.setText("CSS Query");
 
-        queryTxt.setText("[href*=.box.]:not([href*=embed]):not([href*=static]):not(a[target*=blank]),[src*=.box.]:not([src*=embed]:not([src*=static])),[value*=.box.]:not([value*=embed]):not([value*=static])");
+        queryTxt.setText("[src*=box],[href*=box]");
         queryTxt.setToolTipText("");
+
+        jButton1.setText("Save");
+        jButton1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton1ActionPerformed(evt);
+            }
+        });
 
         jMenuBar1.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(172, 172, 172)));
 
@@ -368,11 +380,16 @@ public class LinkGUI extends javax.swing.JFrame {
                         .addComponent(search, javax.swing.GroupLayout.PREFERRED_SIZE, 286, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 35, Short.MAX_VALUE)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jLabel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                        .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 402, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(0, 0, Short.MAX_VALUE)))
-                .addGap(25, 25, 25))
+                    .addGroup(layout.createSequentialGroup()
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jLabel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 402, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(0, 0, Short.MAX_VALUE)))
+                        .addGap(25, 25, 25))
+                    .addGroup(layout.createSequentialGroup()
+                        .addComponent(jButton1)
+                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -382,8 +399,7 @@ public class LinkGUI extends javax.swing.JFrame {
                     .addGroup(layout.createSequentialGroup()
                         .addComponent(jLabel1)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 426, Short.MAX_VALUE)
-                        .addGap(18, 18, 18))
+                        .addComponent(jScrollPane1))
                     .addGroup(layout.createSequentialGroup()
                         .addGap(4, 4, 4)
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
@@ -400,14 +416,15 @@ public class LinkGUI extends javax.swing.JFrame {
                             .addComponent(search, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(jLabel4))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(pickScroll, javax.swing.GroupLayout.PREFERRED_SIZE, 328, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                .addComponent(auditBtn)
-                                .addComponent(pause))
-                            .addComponent(sniffProgress, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addGap(7, 7, 7))))
+                        .addComponent(pickScroll, javax.swing.GroupLayout.PREFERRED_SIZE, 328, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(auditBtn)
+                        .addComponent(pause))
+                    .addComponent(sniffProgress, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jButton1))
+                .addGap(7, 7, 7))
         );
 
         pack();
@@ -466,9 +483,21 @@ public class LinkGUI extends javax.swing.JFrame {
     }//GEN-LAST:event_domainBtnActionPerformed
 
     private boolean running = false;
+    private List<String> valList;
+    private int valListPos = 0;
     public void startProcess(){
         this.ls.reset();
-        String courseid = this.pickCourse.getSelectedValue().toString().split("::")[1];        
+        valList = this.pickCourse.getSelectedValuesList();
+        if (valList.size() > 1){
+            startProcess2(valList.get(valListPos++).split("::")[1]);
+        }
+        else {
+            String courseid = this.pickCourse.getSelectedValue().toString().split("::")[1];
+            startProcess2(courseid);
+        }
+    }
+    
+    public void startProcess2(String courseid){
         if (ls.isShowEnrollments()){
             List courses = this.pickCourse.getSelectedValuesList();
             int size = courses.size();
@@ -484,6 +513,7 @@ public class LinkGUI extends javax.swing.JFrame {
             displayArea.setText(audit);
             auditBtn.setEnabled(true);
             displayArea.setEnabled(true);
+            sniffProgress.setValue(0);
         }
         else{
             ls.dlapGetItemList(courseid);
@@ -504,6 +534,12 @@ public class LinkGUI extends javax.swing.JFrame {
                         else{
                             running = false;
                             auditBtn.setEnabled(true);
+                            sniffProgress.setValue(0);
+                            Save();
+                            if (valListPos < valList.size()){
+                                ls.reset();
+                                startProcess2(valList.get(valListPos++).split("::")[1]);
+                            }
                         }
                     }
                 }
@@ -663,6 +699,40 @@ public class LinkGUI extends javax.swing.JFrame {
         // TODO add your handling code here:
         ls.setShowEnrollments(this.showEnrollments.getState());
     }//GEN-LAST:event_showEnrollmentsActionPerformed
+
+    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
+        // TODO add your handling code here:
+        Save();
+    }//GEN-LAST:event_jButton1ActionPerformed
+    
+    public void Save(){
+        String text = this.displayArea.getText();
+        File file;
+        if (pickCourse.getSelectedValuesList().size() > 1){
+            file = new File("./results/" + pickCourse.getSelectedValuesList().get(valListPos - 1) + ".csv");
+        }
+        else{
+            file = new File("./results/" + pickCourse.getSelectedValue() + ".csv");
+        }
+ 
+        // if file doesnt exists, then create it
+        if (!file.exists()) {
+            try {
+                file.createNewFile();
+            } catch (IOException ex) {
+                Logger.getLogger(LinkGUI.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+
+        try {
+            FileWriter fw = new FileWriter(file.getAbsoluteFile());
+            BufferedWriter bw = new BufferedWriter(fw);
+            bw.write(text);
+            bw.close();
+        } catch (IOException ex) {
+            Logger.getLogger(LinkGUI.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
     
     public void showBroken(String brokens){
         
@@ -674,7 +744,6 @@ public class LinkGUI extends javax.swing.JFrame {
             int progress = (int) ls.progress();
             this.sniffProgress.setValue(progress);
         }
-        
     }
     
     @SuppressWarnings("unchecked")
@@ -738,6 +807,7 @@ public class LinkGUI extends javax.swing.JFrame {
     private javax.swing.JTextArea displayArea;
     private javax.swing.JButton domainBtn;
     private javax.swing.JTextField domainid;
+    private javax.swing.JButton jButton1;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel3;
     private javax.swing.JLabel jLabel4;
